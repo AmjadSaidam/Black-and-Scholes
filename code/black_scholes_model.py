@@ -223,6 +223,7 @@ class Hedging(gbm.StochasticPriceForecast):
     
         return {'hedge_pnl_paths': pnl, 'final_pnl': total_pnls}
 
+# option premiume surface
 def OptionPremiumSurface(stock_prices: np.ndarray, 
                          underlying_returns: np.ndarray, 
                          strike_price: float,
@@ -253,6 +254,7 @@ def OptionPremiumSurface(stock_prices: np.ndarray,
         
     return {'price_axis': s_list, 'times_axis': t_list, 'value_axis': ov_surf}
 
+# delta hedging profit surface 
 def DeltaHedgeProfitSurface(uderlying_returns: np.ndarray,
                             expected_returns: np.ndarray, 
                             strike_prices: np.ndarray,
@@ -285,6 +287,43 @@ def DeltaHedgeProfitSurface(uderlying_returns: np.ndarray,
             pnl_surface[i, j] = exp_final_pnl
     
     return {'growth_rate_axis': mu_matrix, 'strike_price_axis': k_matrix, 'pnl_surface': pnl_surface}
+
+# greeks surface 
+def GreekSurface(asset_returns: float,
+                 strike_price: float, 
+                 option_creation_time: pd.Timestamp, 
+                 option_expiration_time: pd.Timestamp,
+                 stock_prices: np.ndarray, 
+                 times: np.ndarray, 
+                 option_type: str = 'call',
+                 greek_type: str = 'delta'):
+    """
+    """
+    t_list, s_list = np.meshgrid(stock_prices, times)
+    n = t_list.shape[0]
+    m = s_list.shape[0]
+    greek_surf = np.zeros((n, m))
+    for i, t in enumerate(times):
+        for j, st in enumerate(stock_prices):
+            option_model = BlackScholesOptionPricing(st, asset_returns)
+            args = {
+                'strike_price': strike_price, 
+                'current_price': st, 
+                'current_time': t, 
+                'option_creation_time': option_creation_time, 
+                'expiration_time': option_expiration_time, 
+                'option_type': option_type
+            }
+            if greek_type == 'delta':
+                args.pop('current_price', 0)
+                greek_surf[i, j] = option_model.delta(**args)
+            elif greek_type == 'gamma':
+                args.pop('option_type', 0)
+                greek_surf[i, j] = option_model.gamma(**args)
+            elif greek_type == 'theta':
+                greek_surf[i, j] = option_model.theta(**args)
+
+    return {'stock_price_list': s_list, 'times_list': t_list, 'greek_surface': greek_surf}
 
 # payoff functions
 def call_payoff(stock_prices, strike_price, call_prem):

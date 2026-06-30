@@ -32,6 +32,13 @@ def multi_session_state(states_types: dict[str]):
         else:
             pass
 
+def plot3d(X, Y, Z, Xt, Yt, Zt, column = None, key = None):
+    fig = go.Figure(data = [go.Surface(x = X, y = Y, z = Z)])
+    fig.update_layout(scene = dict(xaxis_title = Xt, yaxis_title = Yt, zaxis_title = 'Option Payoff'), title = Zt)
+    if column is not None:
+        return column.plotly_chart(fig, key = key)
+    st.plotly_chart(fig, key = key)
+
 # =============================================
 # Title
 # =============================================
@@ -50,9 +57,9 @@ st.header('Data')
 
 # define portfolio 
 underlying = st.sidebar.text_input('Underlying Equity', 'NVDA') 
-start_date_equity = st.sidebar.text_input('Starte Date Underlying', pd.Timestamp.min)
-start_date_option = st.sidebar.text_input('Start Date Option', pd.Timestamp.min)
-end_date = st.sidebar.text_input('End Date Equity/Option', pd.Timestamp.max)
+start_date_equity = st.sidebar.date_input('Starte Date Underlying', min_value = '2020-01-01')
+start_date_option = st.sidebar.date_input('Start Date Option', min_value = '2026-01-01')
+end_date = st.sidebar.date_input('End Date Equity/Option', min_value = '2026-01-02')
 db_data = DatabentoAsset(api_key, 
                          underlying, 
                          end_date)
@@ -189,7 +196,8 @@ call_value = bs_model.call_option_price(call_strike, call_option_t, call_option_
 put_value = bs_model.put_option_price(put_strike, put_option_t, put_option_t0, put_option_T)
 
 # call and put payoffs 
-stock_prices = np.linspace(0, 500, 100)
+stock_prices = np.linspace(0, 500, 100) # stock price list
+
 call_payoff_T = bs.call_payoff(stock_prices, call_strike, 0)*100
 call_pnl = bs.call_payoff(stock_prices, call_strike, call_value)*100
 put_payoff_T = bs.put_payoff(stock_prices, put_strike, 0)*100
@@ -211,25 +219,27 @@ put_data = pd.DataFrame({'Put Payoff': put_payoff_T, 'Put PnL': put_pnl, 'Put Va
 fig = px.line(call_data, title = 'Call Option Payoff, Profit and Value Curves (OCC)')
 fig.update_layout(xaxis_title = r'Stock Price ($S_T$)', yaxis_title = r'$\Pi(S_T, T)$')
 fig.add_vline(call_strike, line_dash = 'dash', line_color = 'red', annotation_text = 'Call ATM', annotation_position = 'top')
-call.plotly_chart(fig)
+call.plotly_chart(fig, key = "call_payoff_chart")
 fig = px.line(put_data, title = 'Put Option Payoff, Profit and Value Curves (OCC)')
 fig.update_layout(xaxis_title = r'Stock Price ($S_T$)', yaxis_title = r'$\Pi(S_T, T)$')
 fig.add_vline(put_strike, line_dash = 'dash', line_color = 'orange', annotation_text = 'Put ATM', annotation_position = 'top')
-put.plotly_chart(fig)
+put.plotly_chart(fig, key = "put_payoff_chart")
 
 # call and put value surfaces 
 call_times = np.linspace(0, call_contract_length, 100) 
 put_times = np.linspace(0, put_contract_length, 100)
+
 call_prem_surface = bs.OptionPremiumSurface(stock_prices, underlying_returns, call_strike, call_times, top_chain['C'], interest_rate)
 put_prem_surface = bs.OptionPremiumSurface(stock_prices, underlying_returns, put_strike, put_times, top_chain['P'], interest_rate, 'put')
+
 # plot
 fig = go.Figure(data = [go.Surface(x = stock_prices, y = call_times, z = call_prem_surface['value_axis'])])
 fig.update_layout(scene = dict(xaxis_title = 'Stock Price', yaxis_title = r'Calendar Time', zaxis_title = 'Option Payoff'), title = 'Call Option Price Surface')
-call.plotly_chart(fig)
+call.plotly_chart(fig, key = "call_value_surface")
 
 fig = go.Figure(data = [go.Surface(x = stock_prices, y = put_times, z = put_prem_surface['value_axis'])])
 fig.update_layout(scene = dict(xaxis_title = 'Stock Price', yaxis_title = r'Calendar Time', zaxis_title = 'Option Payoff'), title = 'Put Option Price Surface')
-put.plotly_chart(fig)
+put.plotly_chart(fig, key = "put_value_surface")
 
 # =============================================
 # Greeks
@@ -259,27 +269,47 @@ delta_df = pd.DataFrame({'Call Delta': delta['C'],  'Put Delta': delta['P']}, in
 gamma_df = pd.DataFrame({'Call Gamma': gamma['C'],  'Put Gamma': gamma['P']}, index = stock_prices)
 theta_df = pd.DataFrame({'Call Theta': theta['C'],  'Put Theta': theta['P']}, index = stock_prices)
 
-# plot delta 
-with delta_tab: 
+# plot delta
+with delta_tab:
     fig = px.line(delta_df, title = 'Call/Put Option Delta')
     fig.update_layout(xaxis_title = r'Stock Price $S_t$', yaxis_title = r'$\Delta$')
     fig.add_vline(call_strike, line_dash = 'dash', line_color = 'red', annotation_text = 'Call ATM', annotation_position = 'top')
     fig.add_vline(put_strike, line_dash = 'dash', line_color = 'orange', annotation_text = 'Put ATM', annotation_position = 'top')
-    st.plotly_chart(fig, use_container_width = True)
-# plot gamma 
+    st.plotly_chart(fig, use_container_width = True, key = "delta_line_chart")
+
+    call_delta_surf = bs.GreekSurface(underlying_returns, call_strike, call_option_t0, call_option_T, stock_prices, call_times)
+    put_delta_surf = bs.GreekSurface(underlying_returns, put_strike, put_option_t0, put_option_T, stock_prices, put_times, option_type = 'put')
+    call_greek, put_greek = st.columns([.5, .5])
+    plot3d(call_delta_surf['stock_price_list'], call_delta_surf['times_list'], call_delta_surf['greek_surface'], '', '', '', column = call_greek, key = "call_delta_surface")
+    plot3d(put_delta_surf['stock_price_list'], put_delta_surf['times_list'], put_delta_surf['greek_surface'], '', '', '', column = put_greek, key = "put_delta_surface")
+
+# plot gamma
 with gamma_tab:
     fig = px.line(gamma_df, title = 'Call/Put Option Gamma')
     fig.update_layout(xaxis_title = r'Stock Price $S_t$', yaxis_title = r'Gamma ($\Gamma$)')
     fig.add_vline(call_strike, line_dash = 'dash', line_color = 'red', annotation_text = 'Call ATM', annotation_position = 'top')
     fig.add_vline(put_strike, line_dash = 'dash', line_color = 'orange', annotation_text = 'Put ATM', annotation_position = 'top')
-    st.plotly_chart(fig, use_container_width = True)
+    st.plotly_chart(fig, use_container_width = True, key = "gamma_line_chart")
+
+    call_gamma_surf = bs.GreekSurface(underlying_returns, call_strike, call_option_t0, call_option_T, stock_prices, call_times, greek_type = 'gamma')
+    put_gamma_surf = bs.GreekSurface(underlying_returns, put_strike, put_option_t0, put_option_T, stock_prices, put_times, option_type = 'put', greek_type = 'gamma')
+    call_greek, put_greek = st.columns([.5, .5])
+    plot3d(call_gamma_surf['stock_price_list'], call_gamma_surf['times_list'], call_gamma_surf['greek_surface'], '', '', '', column = call_greek, key = "call_gamma_surface")
+    plot3d(put_gamma_surf['stock_price_list'], put_gamma_surf['times_list'], put_gamma_surf['greek_surface'], '', '', '', column = put_greek, key = "put_gamma_surface")
+
 # plot theta
 with theta_tab:
     fig = px.line(theta_df, title = 'Call/Put Option Theta')
     fig.update_layout(xaxis_title = r'Stock Price $S_t$', yaxis_title = r'Theta ($\Theta$)')
     fig.add_vline(call_strike, line_dash = 'dash', line_color = 'red', annotation_text = 'Call ATM', annotation_position = 'top')
     fig.add_vline(put_strike, line_dash = 'dash', line_color = 'orange', annotation_text = 'Put ATM', annotation_position = 'top')
-    st.plotly_chart(fig, use_container_width = True)
+    st.plotly_chart(fig, use_container_width = True, key = "theta_line_chart")
+
+    call_theta_surf = bs.GreekSurface(underlying_returns, call_strike, call_option_t0, call_option_T, stock_prices, call_times, greek_type = 'theta')
+    put_theta_surf = bs.GreekSurface(underlying_returns, put_strike, put_option_t0, put_option_T, stock_prices, put_times, option_type = 'put', greek_type = 'theta')
+    call_greek, put_greek = st.columns([.5, .5])
+    plot3d(call_theta_surf['stock_price_list'], call_theta_surf['times_list'], call_theta_surf['greek_surface'], '', '', '', column = call_greek, key = "call_theta_surface")
+    plot3d(put_theta_surf['stock_price_list'], put_theta_surf['times_list'], put_theta_surf['greek_surface'], '', '', '', column = put_greek, key = "put_theta_surface")
 
 # =============================================
 # Underlying Price Simulation
@@ -352,7 +382,7 @@ with tab1:
     fig.update_yaxes(title = r'Stock Price ($S_t$)')
     fig.add_hline(call_strike, line_dash = 'dash', line_color = 'red', annotation_text = 'Call Strike', annotation_position = 'left', opacity = 1)
     fig.add_hline(put_strike, line_dash = 'dash', line_color = 'orange', annotation_text = 'Put Strike', annotation_position = 'left', opacity = 1)
-    gbm_col.plotly_chart(fig)
+    gbm_col.plotly_chart(fig, key = "gbm_forecast_chart")
 
     # log-normal density plot
     fig = px.line(x = st.session_state.equity_vals, y = st.session_state.log_normal, title = f'Terminal {underlying} Log-normal Density')
@@ -360,7 +390,7 @@ with tab1:
     fig.update_yaxes(title = 'Probability Density')
     fig.add_vline(call_strike, line_dash = 'dash', line_color = 'red', annotation_text = 'Call ATM', annotation_position = 'top')
     fig.add_vline(put_strike, line_dash = 'dash', line_color = 'orange', annotation_text = 'Put ATM', annotation_position = 'top')
-    dist_col.plotly_chart(fig) 
+    dist_col.plotly_chart(fig, key = "lognormal_density_chart")
 
 with tab2:
     metric_data = pd.DataFrame({
@@ -475,10 +505,10 @@ fig.update_layout(xaxis_title = r'C, alendar Time to Option Expiry ($t$)', yaxis
 fig.add_hline(exp_pnl_occ, line_dash = 'dash', line_color = 'red', annotation_text = 'Expected Hedging Profit', annotation_position = 'top')
 fig.add_hline(arb_pnl_occ, line_dash = 'dash', line_color = 'blue', annotation_text = 'Theoretical Riskless Arbitrage Profit', annotation_position = 'top')
 fig.update_traces(line = dict(color = 'green', width = 1))
-st.plotly_chart(fig)
+st.plotly_chart(fig, key = "hedge_pnl_chart")
 
 # =============================================
-# Delta Hedging Profit and Loss Surface 
+# Delta Hedging Profit and Loss Surface
 # =============================================
 st.subheader('Delta Hedging Volatility Surface')
 
@@ -507,4 +537,4 @@ exp_delta_hedging_pnl = bs.DeltaHedgeProfitSurface(underlying_returns, growth_li
 # plot
 fig = go.Figure(data = go.Surface(x = growth_list, y = strike_list, z = exp_delta_hedging_pnl['pnl_surface']))
 fig.update_layout(title = dict(text = f'{underlying} Long Gamma Delta Hedging Conditional Expected Profit Surface'), scene = dict(xaxis_title = 'Underlying Growth', yaxis_title = 'Strike Price', zaxis_title = 'Expected Delta Hedging Profit'))
-st.plotly_chart(fig)
+st.plotly_chart(fig, key = "hedge_pnl_surface")
