@@ -32,9 +32,9 @@ def multi_session_state(states_types: dict[str]):
         else:
             pass
 
-def plot3d(X, Y, Z, Xt, Yt, Zt, column = None, key = None):
+def plot3d(X, Y, Z, Xt, Yt, Zt, column = None, key = None, title = ''):
     fig = go.Figure(data = [go.Surface(x = X, y = Y, z = Z)])
-    fig.update_layout(scene = dict(xaxis_title = Xt, yaxis_title = Yt, zaxis_title = 'Option Payoff'), title = Zt)
+    fig.update_layout(scene = dict(xaxis_title = Xt, yaxis_title = Yt, zaxis_title = Zt), title = title)
     if column is not None:
         return column.plotly_chart(fig, key = key)
     st.plotly_chart(fig, key = key)
@@ -233,13 +233,9 @@ call_prem_surface = bs.OptionPremiumSurface(stock_prices, underlying_returns, ca
 put_prem_surface = bs.OptionPremiumSurface(stock_prices, underlying_returns, put_strike, put_times, top_chain['P'], interest_rate, 'put')
 
 # plot
-fig = go.Figure(data = [go.Surface(x = stock_prices, y = call_times, z = call_prem_surface['value_axis'])])
-fig.update_layout(scene = dict(xaxis_title = 'Stock Price', yaxis_title = r'Calendar Time', zaxis_title = 'Option Payoff'), title = 'Call Option Price Surface')
-call.plotly_chart(fig, key = "call_value_surface")
-
-fig = go.Figure(data = [go.Surface(x = stock_prices, y = put_times, z = put_prem_surface['value_axis'])])
-fig.update_layout(scene = dict(xaxis_title = 'Stock Price', yaxis_title = r'Calendar Time', zaxis_title = 'Option Payoff'), title = 'Put Option Price Surface')
-put.plotly_chart(fig, key = "put_value_surface")
+opt_lbls = ['Stock Prices', 'Calendar Time', 'Option Payoff']
+plot3d(stock_prices, call_times, call_prem_surface['value_axis'], opt_lbls[0], opt_lbls[1], opt_lbls[-1], column = call, key = 'call_value_surface', title = f'{underlying} Call Option Price Surface')
+plot3d(stock_prices, put_times, put_prem_surface['value_axis'], opt_lbls[0], opt_lbls[1], opt_lbls[-1], column = put, key = 'put_value_surface', title = f'{underlying} Put Option Price Surface')
 
 # =============================================
 # Greeks
@@ -269,9 +265,12 @@ delta_df = pd.DataFrame({'Call Delta': delta['C'],  'Put Delta': delta['P']}, in
 gamma_df = pd.DataFrame({'Call Gamma': gamma['C'],  'Put Gamma': gamma['P']}, index = stock_prices)
 theta_df = pd.DataFrame({'Call Theta': theta['C'],  'Put Theta': theta['P']}, index = stock_prices)
 
+# axis labels 
+greek_lbls = ['Calendar Time', 'Stock Price']
+
 # plot delta
 with delta_tab:
-    fig = px.line(delta_df, title = 'Call/Put Option Delta')
+    fig = px.line(delta_df, title = f'{underlying} Call/Put Option Delta')
     fig.update_layout(xaxis_title = r'Stock Price $S_t$', yaxis_title = r'$\Delta$')
     fig.add_vline(call_strike, line_dash = 'dash', line_color = 'red', annotation_text = 'Call ATM', annotation_position = 'top')
     fig.add_vline(put_strike, line_dash = 'dash', line_color = 'orange', annotation_text = 'Put ATM', annotation_position = 'top')
@@ -280,12 +279,12 @@ with delta_tab:
     call_delta_surf = bs.GreekSurface(underlying_returns, call_strike, call_option_t0, call_option_T, stock_prices, call_times)
     put_delta_surf = bs.GreekSurface(underlying_returns, put_strike, put_option_t0, put_option_T, stock_prices, put_times, option_type = 'put')
     call_greek, put_greek = st.columns([.5, .5])
-    plot3d(call_delta_surf['stock_price_list'], call_delta_surf['times_list'], call_delta_surf['greek_surface'], '', '', '', column = call_greek, key = "call_delta_surface")
-    plot3d(put_delta_surf['stock_price_list'], put_delta_surf['times_list'], put_delta_surf['greek_surface'], '', '', '', column = put_greek, key = "put_delta_surface")
+    plot3d(call_delta_surf['stock_price_list'], call_delta_surf['times_list'], call_delta_surf['greek_surface'], greek_lbls[0], greek_lbls[1], 'Call Delta', column = call_greek, key = "call_delta_surface", title = f'{underlying} Call Delta Surface')
+    plot3d(put_delta_surf['stock_price_list'], put_delta_surf['times_list'], put_delta_surf['greek_surface'], greek_lbls[0], greek_lbls[1], 'Put Delta', column = put_greek, key = "put_delta_surface", title = f'{underlying} Put Delta Surface')
 
 # plot gamma
 with gamma_tab:
-    fig = px.line(gamma_df, title = 'Call/Put Option Gamma')
+    fig = px.line(gamma_df, title = f'{underlying} Call/Put Option Gamma')
     fig.update_layout(xaxis_title = r'Stock Price $S_t$', yaxis_title = r'Gamma ($\Gamma$)')
     fig.add_vline(call_strike, line_dash = 'dash', line_color = 'red', annotation_text = 'Call ATM', annotation_position = 'top')
     fig.add_vline(put_strike, line_dash = 'dash', line_color = 'orange', annotation_text = 'Put ATM', annotation_position = 'top')
@@ -294,12 +293,12 @@ with gamma_tab:
     call_gamma_surf = bs.GreekSurface(underlying_returns, call_strike, call_option_t0, call_option_T, stock_prices, call_times, greek_type = 'gamma')
     put_gamma_surf = bs.GreekSurface(underlying_returns, put_strike, put_option_t0, put_option_T, stock_prices, put_times, option_type = 'put', greek_type = 'gamma')
     call_greek, put_greek = st.columns([.5, .5])
-    plot3d(call_gamma_surf['stock_price_list'], call_gamma_surf['times_list'], call_gamma_surf['greek_surface'], '', '', '', column = call_greek, key = "call_gamma_surface")
-    plot3d(put_gamma_surf['stock_price_list'], put_gamma_surf['times_list'], put_gamma_surf['greek_surface'], '', '', '', column = put_greek, key = "put_gamma_surface")
+    plot3d(call_gamma_surf['stock_price_list'], call_gamma_surf['times_list'], call_gamma_surf['greek_surface'], greek_lbls[0], greek_lbls[1], 'Call Gamma', column = call_greek, key = "call_gamma_surface", title = f'{underlying} Call Gamma Surface')
+    plot3d(put_gamma_surf['stock_price_list'], put_gamma_surf['times_list'], put_gamma_surf['greek_surface'], greek_lbls[0], greek_lbls[1], 'Put Gamma', column = put_greek, key = "put_gamma_surface", title = f'{underlying} Put Gamma Surface')
 
 # plot theta
 with theta_tab:
-    fig = px.line(theta_df, title = 'Call/Put Option Theta')
+    fig = px.line(theta_df, title = f'{underlying} Call/Put Option Theta')
     fig.update_layout(xaxis_title = r'Stock Price $S_t$', yaxis_title = r'Theta ($\Theta$)')
     fig.add_vline(call_strike, line_dash = 'dash', line_color = 'red', annotation_text = 'Call ATM', annotation_position = 'top')
     fig.add_vline(put_strike, line_dash = 'dash', line_color = 'orange', annotation_text = 'Put ATM', annotation_position = 'top')
@@ -308,8 +307,8 @@ with theta_tab:
     call_theta_surf = bs.GreekSurface(underlying_returns, call_strike, call_option_t0, call_option_T, stock_prices, call_times, greek_type = 'theta')
     put_theta_surf = bs.GreekSurface(underlying_returns, put_strike, put_option_t0, put_option_T, stock_prices, put_times, option_type = 'put', greek_type = 'theta')
     call_greek, put_greek = st.columns([.5, .5])
-    plot3d(call_theta_surf['stock_price_list'], call_theta_surf['times_list'], call_theta_surf['greek_surface'], '', '', '', column = call_greek, key = "call_theta_surface")
-    plot3d(put_theta_surf['stock_price_list'], put_theta_surf['times_list'], put_theta_surf['greek_surface'], '', '', '', column = put_greek, key = "put_theta_surface")
+    plot3d(call_theta_surf['stock_price_list'], call_theta_surf['times_list'], call_theta_surf['greek_surface'], greek_lbls[0], greek_lbls[1], 'Call Theta', column = call_greek, key = "call_theta_surface", title = f'{underlying} Call Theta Surface')
+    plot3d(put_theta_surf['stock_price_list'], put_theta_surf['times_list'], put_theta_surf['greek_surface'], greek_lbls[0], greek_lbls[1], 'Put Theta', column = put_greek, key = "put_theta_surface", title = f'{underlying} Put Theta Surface')
 
 # =============================================
 # Underlying Price Simulation
