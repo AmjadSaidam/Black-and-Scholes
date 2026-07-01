@@ -1,16 +1,19 @@
 # app
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import streamlit as st
 # general
-import pandas as pd 
-import numpy as np 
+import pandas as pd
+import numpy as np
 from datetime import datetime
 from collections import defaultdict
 # eda
 import matplotlib.pyplot as plt
 import plotly.figure_factory as ff
 import plotly.express as px
-import plotly.graph_objects as go 
-# custom 
+import plotly.graph_objects as go
+# custom
 from data.databento_api_request import DatabentoAsset
 from code.gbm import StochasticPriceForecast
 import code.black_scholes_model as bs
